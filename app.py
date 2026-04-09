@@ -1,44 +1,45 @@
 import streamlit as st
 import google.generativeai as genai
 
-# এখানে আপনার API Key-টি সাবধানে দিন
-API_KEY = "আপনার_API_KEY_এখানে_দিন"
-genai.configure(api_key="AIzaSyCD5zEfMr1dMc7JXpEFC1V_75AbI8W4KPs")
-
+# ১. পেজ সেটআপ (ব্রাউজার ট্যাবে যা দেখাবে)
+st.set_page_config(page_title="Global Student AI", page_icon="🎓")
 st.title("🎓 Global Student AI")
 
-# এটি আপনার Key দিয়ে কোন মডেল চলবে তা নিজে খুঁজে নেবে
-@st.cache_resource
-def get_working_model():
-    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    # যদি flash থাকে তবে সেটা নেবে, না হলে প্রথম যেটা পায় সেটা নেবে
-    for m_name in available_models:
-        if 'gemini-1.5-flash' in m_name:
-            return m_name
-    return available_models[0] if available_models else None
+# ২. সিক্রেট চাবি (API Key) কানেক্ট করা
+# এটি আপনার Streamlit Settings > Secrets থেকে GOOGLE_API_KEY খুঁজে নেবে
+if "GOOGLE_API_KEY" in st.secrets:
+    API_KEY = st.secrets["GOOGLE_API_KEY"]
+    genai.configure(api_key=API_KEY)
+else:
+    st.error("API Key খুঁজে পাওয়া যায়নি! দয়া করে Streamlit Secrets চেক করুন।")
+    st.stop()
 
-try:
-    working_model_name = get_working_model()
-    model = genai.GenerativeModel(working_model_name)
+# ৩. এআই মডেল সেটআপ (Flash মডেলটি দ্রুত কাজ করে)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+# ৪. চ্যাট হিস্ট্রি বা মেসেজ মনে রাখার ব্যবস্থা
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+# ৫. আগের কথাগুলো স্ক্রিনে দেখানো
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    if prompt := st.chat_input("Ask me anything..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+# ৬. ইউজার ইনপুট বক্স এবং উত্তর জেনারেশন
+if prompt := st.chat_input("Ask me anything..."):
+    # ইউজারের মেসেজ সেভ করা এবং দেখানো
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-        response = model.generate_content(prompt)
-        
-        with st.chat_message("assistant"):
+    # এআই-এর উত্তর তৈরি করা
+    with st.chat_message("assistant"):
+        try:
+            response = model.generate_content(prompt)
             st.markdown(response.text)
+            # এআই-এর উত্তর সেভ করা
             st.session_state.messages.append({"role": "assistant", "content": response.text})
-
-except Exception as e:
-    st.error(f"Error: {e}")
-    st.info("আপনার Google AI Studio-তে গিয়ে দেখুন API Key-টি Active আছে কি না।")
+        except Exception as e:
+            # কোটা শেষ হলে বা অন্য সমস্যা হলে এই এরর দেখাবে
+            st.error(f"দুঃখিত, একটি সমস্যা হয়েছে: {e}")
